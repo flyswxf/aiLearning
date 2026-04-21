@@ -15,7 +15,7 @@ PROJECT_ROOT = os.path.dirname(
 )
 sys.path.append(PROJECT_ROOT)
 
-from tests.download_datasets import download_mini_imagenet
+from utils.download_datasets import download_mini_imagenet
 from config import batch_size, image_size
 
 
