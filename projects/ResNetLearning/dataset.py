@@ -66,6 +66,10 @@ train_dataset = MiniImageNetTorchDataset(
 test_dataset = MiniImageNetTorchDataset(
     hf_split=dataset_dict["test"], transform=test_transform
 )
+val_dataset = MiniImageNetTorchDataset(
+    hf_split=dataset_dict["val"], transform=test_transform
+)
+
 pin_memory = torch.cuda.is_available()
 
 train_loader = DataLoader(
@@ -80,7 +84,14 @@ test_loader = DataLoader(
     batch_size=batch_size,
     shuffle=False,
     pin_memory=pin_memory,
-    num_workers=2,  # 降低多进程数量，避免内存 OOM
+    num_workers=2,
+)
+val_loader = DataLoader(
+    val_dataset,
+    batch_size=batch_size,
+    shuffle=False,
+    pin_memory=pin_memory,
+    num_workers=2,
 )
 
 if __name__ == "__main__":

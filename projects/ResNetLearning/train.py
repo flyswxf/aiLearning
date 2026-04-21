@@ -13,7 +13,7 @@ sys.path.append(PROJECT_ROOT)
 
 from models.myModels.myResNet import ResNet
 from config import num_classes, epochs
-from dataset import train_loader
+from dataset import train_loader, val_loader
 from utils.latest_checkpoint import get_latest_checkpoint
 
 os.makedirs(f"{PROJECT_ROOT}/checkpoints", exist_ok=True)
@@ -58,6 +58,20 @@ for epoch in range(start_epoch, epochs):
             print(f"Epoch {epoch}, Batch {i}, Loss: {loss.item():.4f}")
 
     if (epoch + 1) % 10 == 0:
+        # 验证
+        model.eval()
+        with torch.no_grad():
+            correct = 0
+            total = 0
+            for val_X, val_y in val_loader:
+                val_X, val_y = val_X.to(device), val_y.to(device)
+                val_y_hat = model(val_X)
+                _, predicted = torch.max(val_y_hat.data, 1)
+                total += val_y.size(0)
+                correct += (predicted == val_y).sum().item()
+            val_acc = 100 * correct / total
+            print(f"Epoch {epoch+1} Validation Accuracy: {val_acc:.2f}%")
+
         # 如果使用了 DataParallel，保存 model.module 的 state_dict
         state_dict = (
             model.module.state_dict()
