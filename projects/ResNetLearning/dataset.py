@@ -93,7 +93,7 @@ def _build_loader(
 
     # Kaggle 上使用 HF datasets + PIL 解码时，多 worker 容易把 RAM 顶得过高。
     if _is_kaggle_runtime():
-        effective_num_workers = min(data_num_workers, 1)
+        effective_num_workers = min(data_num_workers, 0)
         use_pin_memory = False
 
     loader_kwargs = {
