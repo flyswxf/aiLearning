@@ -43,5 +43,7 @@ for epoch in range(epochs):
         torch.save(
             model.state_dict(), f"{PROJECT_ROOT}/checkpoints/resnet_epoch_{epoch+1}.pth"
         )
+        print(f"Epoch {epoch+1} model saved")
 
 torch.save(model.state_dict(), f"{PROJECT_ROOT}/checkpoints/resnet_latest.pth")
+print("Latest model saved")
