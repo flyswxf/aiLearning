@@ -3,8 +3,6 @@ import sys
 from typing import Callable, Optional, Tuple
 
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 from datasets import Dataset, DatasetDict
 from torch.utils.data import DataLoader, Dataset as TorchDataset
 from torchvision import transforms
@@ -41,57 +39,84 @@ class MiniImageNetTorchDataset(TorchDataset):
 
 imagenet_mean = (0.485, 0.456, 0.406)
 imagenet_std = (0.229, 0.224, 0.225)
-train_transform = transforms.Compose(
-    [
-        transforms.RandomResizedCrop(image_size),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=imagenet_mean, std=imagenet_std),
-    ]
-)
-test_transform = transforms.Compose(
-    [
-        transforms.Resize(256),
-        transforms.CenterCrop(image_size),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=imagenet_mean, std=imagenet_std),
-    ]
-)
 
-dataset_dict: DatasetDict = download_mini_imagenet()
 
-train_dataset = MiniImageNetTorchDataset(
-    hf_split=dataset_dict["train"], transform=train_transform
-)
-test_dataset = MiniImageNetTorchDataset(
-    hf_split=dataset_dict["test"], transform=test_transform
-)
-val_dataset = MiniImageNetTorchDataset(
-    hf_split=dataset_dict["validation"], transform=test_transform
-)
+def build_transforms() -> Tuple[transforms.Compose, transforms.Compose]:
+    train_transform = transforms.Compose(
+        [
+            transforms.RandomResizedCrop(image_size),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=imagenet_mean, std=imagenet_std),
+        ]
+    )
+    eval_transform = transforms.Compose(
+        [
+            transforms.Resize(256),
+            transforms.CenterCrop(image_size),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=imagenet_mean, std=imagenet_std),
+        ]
+    )
+    return train_transform, eval_transform
 
-pin_memory = torch.cuda.is_available()
 
-train_loader = DataLoader(
-    train_dataset,
-    batch_size=batch_size,
-    shuffle=True,
-    num_workers=num_workers,  # 降低多进程数量，避免内存 OOM
-)
-test_loader = DataLoader(
-    test_dataset,
-    batch_size=batch_size,
-    shuffle=False,
-    num_workers=num_workers,
-)
-val_loader = DataLoader(
-    val_dataset,
-    batch_size=batch_size,
-    shuffle=False,
-    num_workers=num_workers,
-)
+def build_datasets(
+    cache_dir: Optional[str] = None,
+) -> Tuple[
+    MiniImageNetTorchDataset, MiniImageNetTorchDataset, MiniImageNetTorchDataset
+]:
+    dataset_dict: DatasetDict = download_mini_imagenet(cache_dir=cache_dir)
+    train_transform, eval_transform = build_transforms()
+
+    train_dataset = MiniImageNetTorchDataset(
+        hf_split=dataset_dict["train"], transform=train_transform
+    )
+    test_dataset = MiniImageNetTorchDataset(
+        hf_split=dataset_dict["test"], transform=eval_transform
+    )
+    val_dataset = MiniImageNetTorchDataset(
+        hf_split=dataset_dict["validation"], transform=eval_transform
+    )
+    return train_dataset, test_dataset, val_dataset
+
+
+def create_dataloaders(
+    data_batch_size: int = batch_size,
+    data_num_workers: int = num_workers,
+    cache_dir: Optional[str] = None,
+) -> Tuple[DataLoader, DataLoader, DataLoader]:
+    train_dataset, test_dataset, val_dataset = build_datasets(cache_dir=cache_dir)
+    use_pin_memory = torch.cuda.is_available()
+    common_loader_kwargs = {
+        "batch_size": data_batch_size,
+        "num_workers": data_num_workers,
+        "pin_memory": use_pin_memory,
+    }
+
+    if data_num_workers > 0:
+        common_loader_kwargs["persistent_workers"] = True
+
+    train_loader = DataLoader(
+        train_dataset,
+        shuffle=True,
+        **common_loader_kwargs,
+    )
+    test_loader = DataLoader(
+        test_dataset,
+        shuffle=False,
+        **common_loader_kwargs,
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        shuffle=False,
+        **common_loader_kwargs,
+    )
+    return train_loader, test_loader, val_loader
+
 
 if __name__ == "__main__":
+    train_dataset, _, _ = build_datasets()
     X, y = train_dataset[0]
     print(X.shape)
     print(y)

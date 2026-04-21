@@ -1,10 +1,10 @@
 import os
 import sys
-from typing import Callable, Optional, Tuple
-
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+from torchmetrics.classification import Accuracy, Precision, Recall, F1Score
+from sklearn.metrics import classification_report
+import warnings
 
 PROJECT_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -12,75 +12,76 @@ PROJECT_ROOT = os.path.dirname(
 sys.path.append(PROJECT_ROOT)
 
 from models.myModels.myResNet import ResNet
-from dataset import test_loader
+from dataset import create_dataloaders
 from config import num_classes
-from torchmetrics.classification import Accuracy, Precision, Recall, F1Score
-from sklearn.metrics import classification_report
-import warnings
 
 warnings.filterwarnings("ignore")
 # 忽略 PIL 读取图片时由于 EXIF 信息损坏导致的警告
 warnings.filterwarnings("ignore", "(?s).*Corrupt EXIF data.*", category=UserWarning)
 
-# 前置条件检查
-assert os.path.exists(
-    f"{PROJECT_ROOT}/checkpoints/resnet_latest.pth"
-), "No checkpoint found."
 
-model = ResNet(num_classes=num_classes)
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+def main() -> None:
+    checkpoint_path = f"{PROJECT_ROOT}/checkpoints/resnet_latest.pth"
+    assert os.path.exists(checkpoint_path), "No checkpoint found."
 
-model.to(device)
-model.load_state_dict(torch.load(f"{PROJECT_ROOT}/checkpoints/resnet_latest.pth"))
+    _, test_loader, _ = create_dataloaders()
+    model = ResNet(num_classes=num_classes)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# 如果有多张显卡，在加载完权重后再用 DataParallel 包装模型
-if torch.cuda.device_count() > 1:
-    model = nn.DataParallel(model)
+    model.to(device)
+    state_dict = torch.load(checkpoint_path, map_location=device)
+    model.load_state_dict(state_dict)
 
-# 初始化 TorchMetrics 评估指标
-test_acc_metric = Accuracy(task="multiclass", num_classes=num_classes).to(device)
-test_prec_metric = Precision(
-    task="multiclass", num_classes=num_classes, average="macro"
-).to(device)
-test_rec_metric = Recall(
-    task="multiclass", num_classes=num_classes, average="macro"
-).to(device)
-test_f1_metric = F1Score(
-    task="multiclass", num_classes=num_classes, average="macro"
-).to(device)
+    # 如果有多张显卡，在加载完权重后再用 DataParallel 包装模型
+    if torch.cuda.device_count() > 1:
+        model = nn.DataParallel(model)
 
-model.eval()
-with torch.no_grad():
-    all_preds = []
-    all_targets = []
-    for X, y in test_loader:
-        X, y = X.to(device), y.to(device)
-        y_hat = model(X)
-        _, predicted = torch.max(y_hat.data, 1)
+    test_acc_metric = Accuracy(task="multiclass", num_classes=num_classes).to(device)
+    test_prec_metric = Precision(
+        task="multiclass", num_classes=num_classes, average="macro"
+    ).to(device)
+    test_rec_metric = Recall(
+        task="multiclass", num_classes=num_classes, average="macro"
+    ).to(device)
+    test_f1_metric = F1Score(
+        task="multiclass", num_classes=num_classes, average="macro"
+    ).to(device)
 
-        # 更新 metrics 状态
-        test_acc_metric.update(predicted, y)
-        test_prec_metric.update(predicted, y)
-        test_rec_metric.update(predicted, y)
-        test_f1_metric.update(predicted, y)
+    model.eval()
+    with torch.no_grad():
+        all_preds = []
+        all_targets = []
+        for X, y in test_loader:
+            X = X.to(device, non_blocking=True)
+            y = y.to(device, non_blocking=True)
+            y_hat = model(X)
+            predicted = y_hat.argmax(dim=1)
 
-        # 这里依然保留收集所有预测值，为了最后给 scikit-learn 画详细分类报告
-        all_preds.extend(predicted.cpu().numpy())
-        all_targets.extend(y.cpu().numpy())
+            test_acc_metric.update(predicted, y)
+            test_prec_metric.update(predicted, y)
+            test_rec_metric.update(predicted, y)
+            test_f1_metric.update(predicted, y)
 
-    # 循环结束后统一计算
-    test_acc = test_acc_metric.compute().item()
-    test_prec = test_prec_metric.compute().item()
-    test_rec = test_rec_metric.compute().item()
-    test_f1 = test_f1_metric.compute().item()
+            # 这里依然保留收集所有预测值，为了最后给 scikit-learn 画详细分类报告
+            all_preds.extend(predicted.cpu().numpy())
+            all_targets.extend(y.cpu().numpy())
 
-    print(f"Test Accuracy: {test_acc:.4f}")
-    print(f"Test Precision (Macro): {test_prec:.4f}")
-    print(f"Test Recall (Macro): {test_rec:.4f}")
-    print(f"Test F1-score (Macro): {test_f1:.4f}")
+        test_acc = test_acc_metric.compute().item()
+        test_prec = test_prec_metric.compute().item()
+        test_rec = test_rec_metric.compute().item()
+        test_f1 = test_f1_metric.compute().item()
 
-    print("\n" + "=" * 50)
-    print("Detailed Classification Report:")
-    print("=" * 50)
-    # 这个报告会把 100 个类的精确率、召回率、F1 分数全部详细打印出来
-    print(classification_report(all_targets, all_preds, digits=4, zero_division=0))
+        print(f"Test Accuracy: {test_acc:.4f}")
+        print(f"Test Precision (Macro): {test_prec:.4f}")
+        print(f"Test Recall (Macro): {test_rec:.4f}")
+        print(f"Test F1-score (Macro): {test_f1:.4f}")
+
+        print("\n" + "=" * 50)
+        print("Detailed Classification Report:")
+        print("=" * 50)
+        print(classification_report(all_targets, all_preds, digits=4, zero_division=0))
+
+
+if __name__ == "__main__":
+    torch.multiprocessing.freeze_support()
+    main()
