@@ -1,4 +1,6 @@
-torch>=2.0.0
-torchvision>=0.15.0
+# torch>=2.0.0      # Kaggle 已经内置了优化好的 torch，不要通过 pip 安装覆盖它
+# torchvision>=0.15.0
 datasets>=2.14.0
 Pillow>=9.0.0
+swanlab>=0.3.14
+torchmetrics>=1.0.0
