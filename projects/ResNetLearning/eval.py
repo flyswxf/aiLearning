@@ -15,6 +15,9 @@ from models.myModels.myResNet import ResNet
 from dataset import test_loader
 from config import num_classes
 
+# 前置条件检查
+assert os.path.exists(f"{PROJECT_ROOT}/checkpoints/resnet_latest.pth"), "No checkpoint found."
+
 model = ResNet(num_classes=num_classes)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

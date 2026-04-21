@@ -14,25 +14,37 @@ sys.path.append(PROJECT_ROOT)
 from models.myModels.myResNet import ResNet
 from config import num_classes, epochs
 from dataset import train_loader
+from utils.latest_checkpoint import get_latest_checkpoint
+
+os.makedirs(f"{PROJECT_ROOT}/checkpoints", exist_ok=True)
 
 
 model = ResNet(num_classes=num_classes)
-
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+model.to(device)
+
+checkpoint_path, start_epoch = get_latest_checkpoint(
+    f"{PROJECT_ROOT}/checkpoints", epochs
+)
+if checkpoint_path:
+    print(f"Resuming training from {checkpoint_path}, starting at epoch {start_epoch}")
+    model.load_state_dict(torch.load(checkpoint_path))
+else:
+    print("No checkpoint found. Starting from scratch.")
+    start_epoch = 0
 
 # 如果有多张显卡，使用 DataParallel 包装模型
 if torch.cuda.device_count() > 1:
     print(f"use {torch.cuda.device_count()} GPUs")
     model = nn.DataParallel(model)
 
-model.to(device)
 
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
-os.makedirs(f"{PROJECT_ROOT}/checkpoints", exist_ok=True)
 
-for epoch in range(epochs):
+for epoch in range(start_epoch, epochs):
     model.train()
     for i, (X, y) in enumerate(train_loader):
         X, y = X.to(device), y.to(device)
