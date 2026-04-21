@@ -67,7 +67,7 @@ test_dataset = MiniImageNetTorchDataset(
     hf_split=dataset_dict["test"], transform=test_transform
 )
 val_dataset = MiniImageNetTorchDataset(
-    hf_split=dataset_dict["val"], transform=test_transform
+    hf_split=dataset_dict["validation"], transform=test_transform
 )
 
 pin_memory = torch.cuda.is_available()
