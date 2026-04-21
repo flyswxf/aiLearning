@@ -89,46 +89,46 @@ for epoch in range(start_epoch, epochs):
             # 记录训练 Loss
             swanlab.log({"Train/Loss": loss.item()})
 
-        # 验证
-        model.eval()
-        with torch.no_grad():
-            for val_X, val_y in val_loader:
-                val_X, val_y = val_X.to(device), val_y.to(device)
-                val_y_hat = model(val_X)
-                _, predicted = torch.max(val_y_hat.data, 1)
+    # 验证
+    model.eval()
+    with torch.no_grad():
+        for val_X, val_y in val_loader:
+            val_X, val_y = val_X.to(device), val_y.to(device)
+            val_y_hat = model(val_X)
+            _, predicted = torch.max(val_y_hat.data, 1)
 
-                # 每个 batch，让 metrics 更新自己的状态
-                val_acc_metric.update(predicted, val_y)
-                val_prec_metric.update(predicted, val_y)
-                val_rec_metric.update(predicted, val_y)
-                val_f1_metric.update(predicted, val_y)
+            # 每个 batch，让 metrics 更新自己的状态
+            val_acc_metric.update(predicted, val_y)
+            val_prec_metric.update(predicted, val_y)
+            val_rec_metric.update(predicted, val_y)
+            val_f1_metric.update(predicted, val_y)
 
-            # 一个 epoch 结束后，计算最终结果
-            val_acc = val_acc_metric.compute().item()
-            val_prec = val_prec_metric.compute().item()
-            val_rec = val_rec_metric.compute().item()
-            val_f1 = val_f1_metric.compute().item()
+        # 一个 epoch 结束后，计算最终结果
+        val_acc = val_acc_metric.compute().item()
+        val_prec = val_prec_metric.compute().item()
+        val_rec = val_rec_metric.compute().item()
+        val_f1 = val_f1_metric.compute().item()
 
-            print(
-                f"Epoch {epoch+1} Validation - Acc: {val_acc:.4f}, Prec: {val_prec:.4f}, Rec: {val_rec:.4f}, F1: {val_f1:.4f}"
-            )
+        print(
+            f"Epoch {epoch+1} Validation - Acc: {val_acc:.4f}, Prec: {val_prec:.4f}, Rec: {val_rec:.4f}, F1: {val_f1:.4f}"
+        )
 
-            # 记录所有验证集指标到 SwanLab
-            swanlab.log(
-                {
-                    "Val/Accuracy": val_acc,
-                    "Val/Precision": val_prec,
-                    "Val/Recall": val_rec,
-                    "Val/F1": val_f1,
-                },
-                step=epoch + 1,
-            )
+        # 记录所有验证集指标到 SwanLab
+        swanlab.log(
+            {
+                "Val/Accuracy": val_acc,
+                "Val/Precision": val_prec,
+                "Val/Recall": val_rec,
+                "Val/F1": val_f1,
+            },
+            step=epoch + 1,
+        )
 
-            # 记录完之后，务必清空 metrics 的状态，以免影响下一个 epoch
-            val_acc_metric.reset()
-            val_prec_metric.reset()
-            val_rec_metric.reset()
-            val_f1_metric.reset()
+        # 记录完之后，务必清空 metrics 的状态，以免影响下一个 epoch
+        val_acc_metric.reset()
+        val_prec_metric.reset()
+        val_rec_metric.reset()
+        val_f1_metric.reset()
             
     if (epoch + 1) % 10 == 0:
         # 如果使用了 DataParallel，保存 model.module 的 state_dict
