@@ -17,8 +17,13 @@ from config import num_classes
 
 model = ResNet(num_classes=num_classes)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 model.to(device)
 model.load_state_dict(torch.load(f"{PROJECT_ROOT}/checkpoints/resnet_latest.pth"))
+
+# 如果有多张显卡，在加载完权重后再用 DataParallel 包装模型
+if torch.cuda.device_count() > 1:
+    model = nn.DataParallel(model)
 
 model.eval()
 with torch.no_grad():
