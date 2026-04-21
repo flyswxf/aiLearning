@@ -17,7 +17,11 @@ from dataset import train_loader, val_loader
 from utils.latest_checkpoint import get_latest_checkpoint
 import swanlab
 import datetime
+import warnings
 from torchmetrics.classification import Accuracy, Precision, Recall, F1Score
+
+# 忽略 PIL 读取图片时由于 EXIF 信息损坏导致的警告
+warnings.filterwarnings("ignore", "(?s).*Corrupt EXIF data.*", category=UserWarning)
 
 os.makedirs(f"{PROJECT_ROOT}/checkpoints", exist_ok=True)
 
@@ -129,7 +133,7 @@ for epoch in range(start_epoch, epochs):
         val_prec_metric.reset()
         val_rec_metric.reset()
         val_f1_metric.reset()
-            
+
     if (epoch + 1) % 10 == 0:
         # 如果使用了 DataParallel，保存 model.module 的 state_dict
         state_dict = (

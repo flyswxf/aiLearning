@@ -16,6 +16,11 @@ from dataset import test_loader
 from config import num_classes
 from torchmetrics.classification import Accuracy, Precision, Recall, F1Score
 from sklearn.metrics import classification_report
+import warnings
+
+warnings.filterwarnings("ignore")
+# 忽略 PIL 读取图片时由于 EXIF 信息损坏导致的警告
+warnings.filterwarnings("ignore", "(?s).*Corrupt EXIF data.*", category=UserWarning)
 
 # 前置条件检查
 assert os.path.exists(

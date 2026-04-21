@@ -16,7 +16,7 @@ PROJECT_ROOT = os.path.dirname(
 sys.path.append(PROJECT_ROOT)
 
 from utils.download_datasets import download_mini_imagenet
-from config import batch_size, image_size
+from config import batch_size, image_size, num_workers
 
 
 class MiniImageNetTorchDataset(TorchDataset):
@@ -76,22 +76,19 @@ train_loader = DataLoader(
     train_dataset,
     batch_size=batch_size,
     shuffle=True,
-    pin_memory=pin_memory,
-    num_workers=2,  # 降低多进程数量，避免内存 OOM
+    num_workers=num_workers,  # 降低多进程数量，避免内存 OOM
 )
 test_loader = DataLoader(
     test_dataset,
     batch_size=batch_size,
     shuffle=False,
-    pin_memory=pin_memory,
-    num_workers=2,
+    num_workers=num_workers,
 )
 val_loader = DataLoader(
     val_dataset,
     batch_size=batch_size,
     shuffle=False,
-    pin_memory=pin_memory,
-    num_workers=2,
+    num_workers=num_workers,
 )
 
 if __name__ == "__main__":
