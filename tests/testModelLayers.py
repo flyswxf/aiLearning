@@ -6,11 +6,11 @@ import torch.nn as nn
 # Add the project root directory to sys.path so we can import from the 'models' package
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from models.AlexNet import AlexNet
-from models.VGG import vgg16
-from models.NiN import NiN
-from models.GoogLeNet import GoogLeNet
-
+# from models.AlexNet import AlexNet
+# from models.VGG import vgg16
+# from models.NiN import NiN
+# from models.GoogLeNet import GoogLeNet
+from models.myModels.myResNet import ResNet
 
 
 def test_model_layers(model: nn.Module, input_tensor: torch.Tensor):
@@ -60,5 +60,5 @@ def test_model_layers(model: nn.Module, input_tensor: torch.Tensor):
 
 
 if __name__ == "__main__":
-    model = GoogLeNet()
+    model = ResNet(num_classes=10)
     test_model_layers(model, torch.randn(size=(1, 3, 224, 224), dtype=torch.float32))
