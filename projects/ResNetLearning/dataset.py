@@ -73,12 +73,14 @@ train_loader = DataLoader(
     batch_size=batch_size,
     shuffle=True,
     pin_memory=pin_memory,
+    num_workers=4,  # 开启多进程数据加载
 )
 test_loader = DataLoader(
     test_dataset,
     batch_size=batch_size,
     shuffle=False,
     pin_memory=pin_memory,
+    num_workers=4,  # 开启多进程数据加载
 )
 
 if __name__ == "__main__":
