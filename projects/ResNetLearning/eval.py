@@ -1,5 +1,6 @@
 import os
 import sys
+import gc
 import torch
 import torch.nn as nn
 from torchmetrics.classification import Accuracy, Precision, Recall, F1Score
@@ -12,7 +13,7 @@ PROJECT_ROOT = os.path.dirname(
 sys.path.append(PROJECT_ROOT)
 
 from models.myModels.myResNet import ResNet
-from dataset import create_dataloaders
+from dataset import create_test_dataloader
 from config import num_classes
 
 warnings.filterwarnings("ignore")
@@ -24,7 +25,7 @@ def main() -> None:
     checkpoint_path = f"{PROJECT_ROOT}/checkpoints/resnet_latest.pth"
     assert os.path.exists(checkpoint_path), "No checkpoint found."
 
-    _, test_loader, _ = create_dataloaders()
+    test_loader = create_test_dataloader()
     model = ResNet(num_classes=num_classes)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -80,6 +81,7 @@ def main() -> None:
         print("Detailed Classification Report:")
         print("=" * 50)
         print(classification_report(all_targets, all_preds, digits=4, zero_division=0))
+        gc.collect()
 
 
 if __name__ == "__main__":

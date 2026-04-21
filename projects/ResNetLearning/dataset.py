@@ -81,38 +81,109 @@ def build_datasets(
     return train_dataset, test_dataset, val_dataset
 
 
+def _is_kaggle_runtime() -> bool:
+    return "KAGGLE_KERNEL_RUN_TYPE" in os.environ or os.path.exists("/kaggle")
+
+
+def _build_loader(
+    dataset: TorchDataset, shuffle: bool, data_batch_size: int, data_num_workers: int
+) -> DataLoader:
+    effective_num_workers = data_num_workers
+    use_pin_memory = torch.cuda.is_available()
+
+    # Kaggle 上使用 HF datasets + PIL 解码时，多 worker 容易把 RAM 顶得过高。
+    if _is_kaggle_runtime():
+        effective_num_workers = min(data_num_workers, 1)
+        use_pin_memory = False
+
+    loader_kwargs = {
+        "batch_size": data_batch_size,
+        "shuffle": shuffle,
+        "num_workers": effective_num_workers,
+        "pin_memory": use_pin_memory,
+    }
+
+    if effective_num_workers > 0:
+        loader_kwargs["prefetch_factor"] = 1
+        loader_kwargs["persistent_workers"] = False
+
+    return DataLoader(dataset, **loader_kwargs)
+
+
 def create_dataloaders(
     data_batch_size: int = batch_size,
     data_num_workers: int = num_workers,
     cache_dir: Optional[str] = None,
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:
     train_dataset, test_dataset, val_dataset = build_datasets(cache_dir=cache_dir)
-    use_pin_memory = torch.cuda.is_available()
-    common_loader_kwargs = {
-        "batch_size": data_batch_size,
-        "num_workers": data_num_workers,
-        "pin_memory": use_pin_memory,
-    }
-
-    if data_num_workers > 0:
-        common_loader_kwargs["persistent_workers"] = True
-
-    train_loader = DataLoader(
+    train_loader = _build_loader(
         train_dataset,
         shuffle=True,
-        **common_loader_kwargs,
+        data_batch_size=data_batch_size,
+        data_num_workers=data_num_workers,
     )
-    test_loader = DataLoader(
+    test_loader = _build_loader(
         test_dataset,
         shuffle=False,
-        **common_loader_kwargs,
+        data_batch_size=data_batch_size,
+        data_num_workers=data_num_workers,
     )
-    val_loader = DataLoader(
+    val_loader = _build_loader(
         val_dataset,
         shuffle=False,
-        **common_loader_kwargs,
+        data_batch_size=data_batch_size,
+        data_num_workers=data_num_workers,
     )
     return train_loader, test_loader, val_loader
+
+
+def create_train_val_dataloaders(
+    data_batch_size: int = batch_size,
+    data_num_workers: int = num_workers,
+    cache_dir: Optional[str] = None,
+) -> Tuple[DataLoader, DataLoader]:
+    dataset_dict: DatasetDict = download_mini_imagenet(cache_dir=cache_dir)
+    train_transform, eval_transform = build_transforms()
+
+    train_dataset = MiniImageNetTorchDataset(
+        hf_split=dataset_dict["train"], transform=train_transform
+    )
+    val_dataset = MiniImageNetTorchDataset(
+        hf_split=dataset_dict["validation"], transform=eval_transform
+    )
+
+    train_loader = _build_loader(
+        train_dataset,
+        shuffle=True,
+        data_batch_size=data_batch_size,
+        data_num_workers=data_num_workers,
+    )
+    val_loader = _build_loader(
+        val_dataset,
+        shuffle=False,
+        data_batch_size=data_batch_size,
+        data_num_workers=data_num_workers,
+    )
+    return train_loader, val_loader
+
+
+def create_test_dataloader(
+    data_batch_size: int = batch_size,
+    data_num_workers: int = num_workers,
+    cache_dir: Optional[str] = None,
+) -> DataLoader:
+    dataset_dict: DatasetDict = download_mini_imagenet(cache_dir=cache_dir)
+    _, eval_transform = build_transforms()
+
+    test_dataset = MiniImageNetTorchDataset(
+        hf_split=dataset_dict["test"], transform=eval_transform
+    )
+    return _build_loader(
+        test_dataset,
+        shuffle=False,
+        data_batch_size=data_batch_size,
+        data_num_workers=data_num_workers,
+    )
 
 
 if __name__ == "__main__":

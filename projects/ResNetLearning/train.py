@@ -1,6 +1,7 @@
 import os
 import sys
 import datetime
+import gc
 import warnings
 
 import torch
@@ -15,7 +16,7 @@ sys.path.append(PROJECT_ROOT)
 
 from models.myModels.myResNet import ResNet
 from config import num_classes, epochs, batch_size, image_size
-from dataset import create_dataloaders
+from dataset import create_train_val_dataloaders
 from utils.latest_checkpoint import get_latest_checkpoint
 
 # 忽略 PIL 读取图片时由于 EXIF 信息损坏导致的警告
@@ -40,7 +41,7 @@ def main() -> None:
         },
     )
 
-    train_loader, _, val_loader = create_dataloaders()
+    train_loader, val_loader = create_train_val_dataloaders()
     model = ResNet(num_classes=num_classes)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
@@ -131,6 +132,8 @@ def main() -> None:
             val_rec_metric.reset()
             val_f1_metric.reset()
 
+        gc.collect()
+
         if (epoch + 1) % 10 == 0:
             # 如果使用了 DataParallel，保存 model.module 的 state_dict
             state_dict = (
@@ -143,7 +146,6 @@ def main() -> None:
             )
             print(f"Epoch {epoch+1} model saved")
 
-    
     state_dict = (
         model.module.state_dict()
         if isinstance(model, nn.DataParallel)
