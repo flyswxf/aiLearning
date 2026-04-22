@@ -50,7 +50,7 @@ def main() -> None:
         },
     )
 
-    train_loader, val_loader = create_train_val_dataloaders()
+    # train_loader, val_loader = create_train_val_dataloaders()
     model = ResNet(num_classes=num_classes)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
@@ -92,9 +92,11 @@ def main() -> None:
     for epoch in range(start_epoch, epochs):
         model.train()
         print_ram(f"Epoch {epoch} Start")
-        for i, (X, y) in enumerate(train_loader):
-            X = X.to(device, non_blocking=True)
-            y = y.to(device, non_blocking=True)
+        for i in range(1000): 
+            X, y = torch.randn(64, 3, 224, 224), torch.randint(0, 100, (64,))
+        # for i, (X, y) in enumerate(train_loader):
+            # X = X.to(device, non_blocking=True)
+            # y = y.to(device, non_blocking=True)
             optimizer.zero_grad()
             y_hat = model(X)
             loss = criterion(y_hat, y)
