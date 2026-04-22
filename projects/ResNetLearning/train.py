@@ -3,6 +3,7 @@ import sys
 import datetime
 import gc
 import warnings
+import psutil
 
 import torch
 import torch.nn as nn
@@ -21,6 +22,14 @@ from utils.latest_checkpoint import get_latest_checkpoint
 
 # 忽略 PIL 读取图片时由于 EXIF 信息损坏导致的警告
 warnings.filterwarnings("ignore", "(?s).*Corrupt EXIF data.*", category=UserWarning)
+
+
+def print_ram(stage: str):
+    """打印当前进程及子进程的物理内存占用（RSS）"""
+    process = psutil.Process(os.getpid())
+    mem_info = process.memory_info()
+    ram_gb = mem_info.rss / (1024**3)
+    print(f"[Memory Monitor] {stage} - CPU RAM: {ram_gb:.3f} GB")
 
 
 def main() -> None:
@@ -78,8 +87,11 @@ def main() -> None:
         task="multiclass", num_classes=num_classes, average="macro"
     ).to(device)
 
+    print_ram("Before Training Loop Starts")
+
     for epoch in range(start_epoch, epochs):
         model.train()
+        print_ram(f"Epoch {epoch} Start")
         for i, (X, y) in enumerate(train_loader):
             X = X.to(device, non_blocking=True)
             y = y.to(device, non_blocking=True)
@@ -92,6 +104,10 @@ def main() -> None:
             if i % 100 == 0:
                 print(f"Epoch {epoch}, Batch {i}, Loss: {loss.item():.4f}")
                 swanlab.log({"Train/Loss": loss.item()})
+                if i > 0 and i % 500 == 0:
+                    print_ram(f"Epoch {epoch} - After {i} Train Batches")
+
+        print_ram(f"Epoch {epoch} - After Train Loop")
 
         # 验证
         model.eval()
@@ -133,6 +149,7 @@ def main() -> None:
             val_f1_metric.reset()
 
         gc.collect()
+        print_ram(f"Epoch {epoch} - After Validation & GC")
 
         if (epoch + 1) % 10 == 0:
             # 如果使用了 DataParallel，保存 model.module 的 state_dict

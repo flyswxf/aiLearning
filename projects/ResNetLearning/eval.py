@@ -81,7 +81,6 @@ def main() -> None:
         print("Detailed Classification Report:")
         print("=" * 50)
         print(classification_report(all_targets, all_preds, digits=4, zero_division=0))
-        gc.collect()
 
 
 if __name__ == "__main__":
