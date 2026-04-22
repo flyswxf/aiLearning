@@ -93,7 +93,7 @@ def main() -> None:
         model.train()
         print_ram(f"Epoch {epoch} Start")
         for i in range(1000): 
-            X, y = torch.randn(64, 3, 224, 224), torch.randint(0, 100, (64,))
+            X, y = torch.randn(64, 3, 224, 224, device=device), torch.randint(0, 100, (64, ), device=device)
         # for i, (X, y) in enumerate(train_loader):
             # X = X.to(device, non_blocking=True)
             # y = y.to(device, non_blocking=True)
