@@ -36,6 +36,7 @@ def main() -> None:
             "image_size": image_size,
             "learning_rate": 0.001,
             "optimizer": "Adam",
+            "scheduler": "CosineAnnealingLR",
             "loss_fn": "CrossEntropyLoss",
         },
     )
@@ -45,6 +46,11 @@ def main() -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=epochs, eta_min=1e-5
+    )
+
     checkpoint_path, start_epoch = get_latest_checkpoint(
         f"{PROJECT_ROOT}/checkpoints", epochs
     )
@@ -52,8 +58,11 @@ def main() -> None:
         print(
             f"Resuming training from {checkpoint_path}, starting at epoch {start_epoch}"
         )
-        state_dict = torch.load(checkpoint_path, map_location=device)
-        model.load_state_dict(state_dict)
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+        model.load_state_dict(checkpoint["model_state_dict"])
+        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+
     else:
         print("No checkpoint found. Starting from scratch.")
         start_epoch = 0
@@ -64,7 +73,6 @@ def main() -> None:
         model = nn.DataParallel(model)
 
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
     val_acc_metric = Accuracy(task="multiclass", num_classes=num_classes).to(device)
     val_prec_metric = Precision(
@@ -131,7 +139,12 @@ def main() -> None:
             val_rec_metric.reset()
             val_f1_metric.reset()
 
+        # 更新学习率
+        scheduler.step()
 
+        current_lr = optimizer.param_groups[0]["lr"]
+        swanlab.log({"Train/LearningRate": current_lr}, step=epoch + 1)
+        print(f"Epoch {epoch+1} - Learning Rate: {current_lr:.6f}")
 
         if (epoch + 1) % 10 == 0:
             # 如果使用了 DataParallel，保存 model.module 的 state_dict
@@ -140,8 +153,14 @@ def main() -> None:
                 if isinstance(model, nn.DataParallel)
                 else model.state_dict()
             )
+            checkpoint = {
+                "epoch": epoch + 1,
+                "model_state_dict": state_dict,
+                "optimizer_state_dict": optimizer.state_dict(),
+                "scheduler_state_dict": scheduler.state_dict(),
+            }
             torch.save(
-                state_dict, f"{PROJECT_ROOT}/checkpoints/resnet_epoch_{epoch+1}.pth"
+                checkpoint, f"{PROJECT_ROOT}/checkpoints/resnet_epoch_{epoch+1}.pth"
             )
             print(f"Epoch {epoch+1} model saved")
 
@@ -150,7 +169,13 @@ def main() -> None:
         if isinstance(model, nn.DataParallel)
         else model.state_dict()
     )
-    torch.save(state_dict, f"{PROJECT_ROOT}/checkpoints/resnet_latest.pth")
+    checkpoint = {
+        "epoch": epochs,
+        "model_state_dict": state_dict,
+        "optimizer_state_dict": optimizer.state_dict(),
+        "scheduler_state_dict": scheduler.state_dict(),
+    }
+    torch.save(checkpoint, f"{PROJECT_ROOT}/checkpoints/resnet_latest.pth")
     print("Latest model saved")
 
 

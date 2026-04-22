@@ -29,8 +29,8 @@ def main() -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model.to(device)
-    state_dict = torch.load(checkpoint_path, map_location=device)
-    model.load_state_dict(state_dict)
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    model.load_state_dict(checkpoint["model_state_dict"])
 
     # 如果有多张显卡，在加载完权重后再用 DataParallel 包装模型
     if torch.cuda.device_count() > 1:
