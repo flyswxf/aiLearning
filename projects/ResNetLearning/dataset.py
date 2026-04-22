@@ -91,10 +91,6 @@ def _build_loader(
     effective_num_workers = data_num_workers
     use_pin_memory = torch.cuda.is_available()
 
-    # Kaggle 上使用 HF datasets + PIL 解码时，多 worker 容易把 RAM 顶得过高。
-    if _is_kaggle_runtime():
-        effective_num_workers = min(data_num_workers, 0)
-
     loader_kwargs = {
         "batch_size": data_batch_size,
         "shuffle": shuffle,
