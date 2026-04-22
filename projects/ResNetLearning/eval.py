@@ -1,6 +1,5 @@
 import os
 import sys
-import gc
 import torch
 import torch.nn as nn
 from torchmetrics.classification import Accuracy, Precision, Recall, F1Score

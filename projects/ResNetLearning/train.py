@@ -1,9 +1,7 @@
 import os
 import sys
 import datetime
-import gc
 import warnings
-import psutil
 
 import torch
 import torch.nn as nn
@@ -24,14 +22,6 @@ from utils.latest_checkpoint import get_latest_checkpoint
 warnings.filterwarnings("ignore", "(?s).*Corrupt EXIF data.*", category=UserWarning)
 
 
-def print_ram(stage: str):
-    """打印当前进程及子进程的物理内存占用（RSS）"""
-    process = psutil.Process(os.getpid())
-    mem_info = process.memory_info()
-    ram_gb = mem_info.rss / (1024**3)
-    print(f"[Memory Monitor] {stage} - CPU RAM: {ram_gb:.3f} GB")
-
-
 def main() -> None:
     os.makedirs(f"{PROJECT_ROOT}/checkpoints", exist_ok=True)
 
@@ -50,7 +40,7 @@ def main() -> None:
         },
     )
 
-    # train_loader, val_loader = create_train_val_dataloaders()
+    train_loader, val_loader = create_train_val_dataloaders()
     model = ResNet(num_classes=num_classes)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
@@ -87,16 +77,11 @@ def main() -> None:
         task="multiclass", num_classes=num_classes, average="macro"
     ).to(device)
 
-    print_ram("Before Training Loop Starts")
-
     for epoch in range(start_epoch, epochs):
         model.train()
-        print_ram(f"Epoch {epoch} Start")
-        for i in range(1000): 
-            X, y = torch.randn(64, 3, 224, 224, device=device), torch.randint(0, 100, (64, ), device=device)
-        # for i, (X, y) in enumerate(train_loader):
-            # X = X.to(device, non_blocking=True)
-            # y = y.to(device, non_blocking=True)
+        for i, (X, y) in enumerate(train_loader):
+            X = X.to(device, non_blocking=True)
+            y = y.to(device, non_blocking=True)
             optimizer.zero_grad()
             y_hat = model(X)
             loss = criterion(y_hat, y)
@@ -106,52 +91,47 @@ def main() -> None:
             if i % 100 == 0:
                 print(f"Epoch {epoch}, Batch {i}, Loss: {loss.item():.4f}")
                 swanlab.log({"Train/Loss": loss.item()})
-                if i > 0 and i % 500 == 0:
-                    print_ram(f"Epoch {epoch} - After {i} Train Batches")
-
-        print_ram(f"Epoch {epoch} - After Train Loop")
 
         # 验证
-        # model.eval()
-        # with torch.no_grad():
-        #     for val_X, val_y in val_loader:
-        #         val_X = val_X.to(device, non_blocking=True)
-        #         val_y = val_y.to(device, non_blocking=True)
-        #         val_y_hat = model(val_X)
-        #         predicted = val_y_hat.argmax(dim=1)
+        model.eval()
+        with torch.no_grad():
+            for val_X, val_y in val_loader:
+                val_X = val_X.to(device, non_blocking=True)
+                val_y = val_y.to(device, non_blocking=True)
+                val_y_hat = model(val_X)
+                predicted = val_y_hat.argmax(dim=1)
 
-        #         # 每个 batch，让 metrics 更新自己的状态
-        #         val_acc_metric.update(predicted, val_y)
-        #         val_prec_metric.update(predicted, val_y)
-        #         val_rec_metric.update(predicted, val_y)
-        #         val_f1_metric.update(predicted, val_y)
+                # 每个 batch，让 metrics 更新自己的状态
+                val_acc_metric.update(predicted, val_y)
+                val_prec_metric.update(predicted, val_y)
+                val_rec_metric.update(predicted, val_y)
+                val_f1_metric.update(predicted, val_y)
 
-        #     val_acc = val_acc_metric.compute().item()
-        #     val_prec = val_prec_metric.compute().item()
-        #     val_rec = val_rec_metric.compute().item()
-        #     val_f1 = val_f1_metric.compute().item()
+            val_acc = val_acc_metric.compute().item()
+            val_prec = val_prec_metric.compute().item()
+            val_rec = val_rec_metric.compute().item()
+            val_f1 = val_f1_metric.compute().item()
 
-        #     print(
-        #         f"Epoch {epoch+1} Validation - Acc: {val_acc:.4f}, Prec: {val_prec:.4f}, Rec: {val_rec:.4f}, F1: {val_f1:.4f}"
-        #     )
+            print(
+                f"Epoch {epoch+1} Validation - Acc: {val_acc:.4f}, Prec: {val_prec:.4f}, Rec: {val_rec:.4f}, F1: {val_f1:.4f}"
+            )
 
-        #     swanlab.log(
-        #         {
-        #             "Val/Accuracy": val_acc,
-        #             "Val/Precision": val_prec,
-        #             "Val/Recall": val_rec,
-        #             "Val/F1": val_f1,
-        #         },
-        #         step=epoch + 1,
-        #     )
+            swanlab.log(
+                {
+                    "Val/Accuracy": val_acc,
+                    "Val/Precision": val_prec,
+                    "Val/Recall": val_rec,
+                    "Val/F1": val_f1,
+                },
+                step=epoch + 1,
+            )
 
-        #     val_acc_metric.reset()
-        #     val_prec_metric.reset()
-        #     val_rec_metric.reset()
-        #     val_f1_metric.reset()
+            val_acc_metric.reset()
+            val_prec_metric.reset()
+            val_rec_metric.reset()
+            val_f1_metric.reset()
 
-        # gc.collect()
-        # print_ram(f"Epoch {epoch} - After Validation & GC")
+
 
         if (epoch + 1) % 10 == 0:
             # 如果使用了 DataParallel，保存 model.module 的 state_dict
