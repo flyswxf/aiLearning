@@ -2,7 +2,6 @@ import os
 import sys
 import datetime
 import warnings
-import math
 
 import torch
 import torch.nn as nn
@@ -15,7 +14,17 @@ PROJECT_ROOT = os.path.dirname(
 sys.path.append(PROJECT_ROOT)
 
 from models.myModels.myResNet import ResNet
-from config import num_classes, epochs, batch_size, image_size
+from config import (
+    num_classes,
+    epochs,
+    batch_size,
+    image_size,
+    learning_rate,
+    momentum,
+    weight_decay,
+    lr_step_size,
+    lr_gamma,
+)
 from dataset import create_train_val_dataloaders
 from utils.latest_checkpoint import get_latest_checkpoint
 
@@ -26,13 +35,6 @@ warnings.filterwarnings("ignore", "(?s).*Corrupt EXIF data.*", category=UserWarn
 def main() -> None:
     os.makedirs(f"{PROJECT_ROOT}/checkpoints", exist_ok=True)
 
-    # mini-ImageNet 常用训练超参数
-    base_lr = 0.1 * batch_size / 256
-    momentum = 0.9
-    weight_decay = 5e-4
-    warmup_epochs = 5
-    label_smoothing = 0.1
-
     current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     swanlab.init(
         project="ResNetLearning",
@@ -42,12 +44,12 @@ def main() -> None:
             "epochs": epochs,
             "batch_size": batch_size,
             "image_size": image_size,
-            "learning_rate": base_lr,
-            "optimizer": "SGD(momentum,nesterov)",
-            "scheduler": "Warmup+Cosine(step-wise)",
-            "warmup_epochs": warmup_epochs,
+            "learning_rate": learning_rate,
+            "optimizer": "SGD(momentum)",
+            "scheduler": "StepLR",
+            "lr_step_size": lr_step_size,
+            "lr_gamma": lr_gamma,
             "weight_decay": weight_decay,
-            "label_smoothing": label_smoothing,
             "loss_fn": "CrossEntropyLoss",
         },
     )
@@ -59,24 +61,14 @@ def main() -> None:
 
     optimizer = torch.optim.SGD(
         model.parameters(),
-        lr=base_lr,
+        lr=learning_rate,
         momentum=momentum,
         weight_decay=weight_decay,
-        nesterov=True,
     )
     train_steps_per_epoch = len(train_loader)
-    total_steps = epochs * train_steps_per_epoch
-    warmup_steps = warmup_epochs * train_steps_per_epoch
-
-    def lr_lambda(current_step: int) -> float:
-        if current_step < warmup_steps:
-            return float(current_step + 1) / float(max(1, warmup_steps))
-        progress = float(current_step - warmup_steps) / float(
-            max(1, total_steps - warmup_steps)
-        )
-        return 0.5 * (1.0 + math.cos(math.pi * progress))
-
-    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
+    scheduler = torch.optim.lr_scheduler.StepLR(
+        optimizer, step_size=lr_step_size, gamma=lr_gamma
+    )
     scaler = torch.amp.GradScaler("cuda", enabled=device.type == "cuda")
 
     checkpoint_path, start_epoch = get_latest_checkpoint(
@@ -106,7 +98,7 @@ def main() -> None:
         print(f"use {torch.cuda.device_count()} GPUs")
         model = nn.DataParallel(model)
 
-    criterion = nn.CrossEntropyLoss(label_smoothing=label_smoothing)
+    criterion = nn.CrossEntropyLoss()
 
     val_acc_metric = Accuracy(task="multiclass", num_classes=num_classes).to(device)
     val_prec_metric = Precision(
@@ -134,7 +126,6 @@ def main() -> None:
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
-            scheduler.step()
 
             batch_size_now = X.size(0)
             running_loss += loss.item() * batch_size_now
@@ -202,6 +193,7 @@ def main() -> None:
         print(
             f"Epoch {epoch+1} - TrainLoss: {epoch_train_loss:.4f}, Learning Rate: {current_lr:.6f}"
         )
+        scheduler.step()
 
         if (epoch + 1) % 10 == 0:
             # 如果使用了 DataParallel，保存 model.module 的 state_dict
