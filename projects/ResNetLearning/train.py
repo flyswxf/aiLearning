@@ -69,7 +69,6 @@ def main() -> None:
     scheduler = torch.optim.lr_scheduler.StepLR(
         optimizer, step_size=lr_step_size, gamma=lr_gamma
     )
-    scaler = torch.amp.GradScaler("cuda", enabled=device.type == "cuda")
 
     checkpoint_path, start_epoch = get_latest_checkpoint(
         f"{PROJECT_ROOT}/checkpoints", epochs
@@ -119,13 +118,10 @@ def main() -> None:
             X = X.to(device, non_blocking=True)
             y = y.to(device, non_blocking=True)
             optimizer.zero_grad()
-            with torch.amp.autocast("cuda", enabled=device.type == "cuda"):
-                y_hat = model(X)
-                loss = criterion(y_hat, y)
-
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
+            y_hat = model(X)
+            loss = criterion(y_hat, y)
+            loss.backward()
+            optimizer.step()
 
             batch_size_now = X.size(0)
             running_loss += loss.item() * batch_size_now
