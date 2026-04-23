@@ -77,7 +77,7 @@ def main() -> None:
         return 0.5 * (1.0 + math.cos(math.pi * progress))
 
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
-    scaler = torch.cuda.amp.GradScaler(enabled=device.type == "cuda")
+    scaler = torch.amp.GradScaler("cuda", enabled=device.type == "cuda")
 
     checkpoint_path, start_epoch = get_latest_checkpoint(
         f"{PROJECT_ROOT}/checkpoints", epochs
@@ -95,7 +95,6 @@ def main() -> None:
         global_step = int(
             checkpoint.get("global_step", start_epoch * train_steps_per_epoch)
         )
-
 
     else:
         print("No checkpoint found. Starting from scratch.")
@@ -128,7 +127,7 @@ def main() -> None:
             X = X.to(device, non_blocking=True)
             y = y.to(device, non_blocking=True)
             optimizer.zero_grad()
-            with torch.cuda.amp.autocast(enabled=device.type == "cuda"):
+            with torch.amp.autocast("cuda", enabled=device.type == "cuda"):
                 y_hat = model(X)
                 loss = criterion(y_hat, y)
 
